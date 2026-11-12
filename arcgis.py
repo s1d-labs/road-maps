@@ -8,19 +8,14 @@ Local test: python arcgis.py --local <layer url> <first id> (one page, files sav
 import gzip
 import json
 import os
-import signal
 import sys
 import time
 
 import requests
+from scrape_hub_client import HubClient, LocalHub, seed_queue, stop_flag, timed_get
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; s1d-labs public records crawl; +https://labs.s1d.me)"}
-stop = False
-
-
-def on_signal(*_):
-    global stop
-    stop = True
+stop = stop_flag(install=False)     # set on SIGINT / SIGTERM once main() installs the handlers
 
 
 class Layer:
@@ -33,27 +28,13 @@ class Layer:
         wait = self.last + self.gap - time.time()
         if wait > 0:
             time.sleep(wait)
-        t = time.time()
         for attempt in range(4):
-            try:
-                r = self.s.get(self.url + "/query", params=params, timeout=(20, 300))
-            except requests.RequestException:
-                self.last = time.time()
-                if self.hub:
-                    self.hub.metric("http_error")
-                    self.hub.error()
-                if attempt == 3:
-                    raise
+            # request metrics for the hub (none when hub is None); the last attempt raises a connection error
+            r = timed_get(self.hub, self.s, self.url + "/query", params=params, timeout=(20, 300), raise_errors=attempt == 3)
+            self.last = time.time()
+            if r is None:
                 time.sleep(10 * (attempt + 1))
                 continue
-            self.last = time.time()
-            if self.hub:
-                self.hub.metric("n_http")
-                self.hub.metric("t_http_s", self.last - t)
-                if r.status_code != 200:
-                    self.hub.metric(f"http_{r.status_code}")
-                    if r.status_code in (403, 429, 503):
-                        self.hub.block()
             if r.status_code == 200:
                 d = r.json()
                 if "error" not in d:            # ArcGIS reports errors in a 200 answer
@@ -104,16 +85,14 @@ def run_page(hub, L, item, p):
 
 
 def main():
-    from scrape_hub_client import HubClient, seed_queue
     project = os.environ["SCRAPE_POOL_PROJECT"]
     deadline = time.time() + float(os.environ.get("SCRAPE_MAX_HOURS", "1")) * 3600 - 300
     hub = HubClient(project, job_index=int(os.environ.get("SCRAPE_JOB_INDEX", 0)), total_jobs=int(os.environ.get("SCRAPE_TOTAL_JOBS", 1)))
-    signal.signal(signal.SIGINT, on_signal)
-    signal.signal(signal.SIGTERM, on_signal)
+    stop_flag()
     gap = max(0.5, hub.settings.get("delay_ms", 1000) / 1000)
     layers = {}
     try:
-        while time.time() < deadline and not stop:
+        while time.time() < deadline and not stop.is_set():
             if hub.settings.get("paused"):
                 time.sleep(30)
                 continue
@@ -131,48 +110,17 @@ def main():
             except Exception as e:      # one bad page must not stop the run
                 hub.failure("bad-item", item["key"], f"{type(e).__name__}: {e}"[:200])
                 hub.complete([item["key"]], "failed", error=type(e).__name__)
-        hub.close("finished" if not stop else "failed", "" if not stop else "stopped by signal")
+        hub.close("finished" if not stop.is_set() else "failed", "" if not stop.is_set() else "stopped by signal")
     except Exception as e:
         hub.close("failed", str(e)[:200])
         raise
-
-
-class LocalHub:
-    """Stands in for the hub in a local test: files go to /tmp/arcgis-test, records are printed."""
-    settings = {}
-
-    def __init__(self):
-        os.makedirs("/tmp/arcgis-test", exist_ok=True)
-
-    def metric(self, *a):
-        pass
-
-    def error(self):
-        pass
-
-    def block(self):
-        print("blocked")
-
-    def failure(self, *a):
-        print("failure", a)
-
-    def complete(self, keys, status, **k):
-        print("complete", keys, status, k)
-
-    def upload_many(self, files):
-        for p, body, _ in files:
-            open("/tmp/arcgis-test/" + p.replace("/", "__"), "wb").write(body)
-            print("file", p, len(body))
-
-    def record(self, rid, data):
-        print("record", rid, json.dumps(data)[:600])
 
 
 if __name__ == "__main__":
     if len(sys.argv) > 3 and sys.argv[1] == "--local":
         url, a = sys.argv[2], int(sys.argv[3])
         p = {"url": url, "name": "local", "oid": "objectid", "size": 2000}
-        hub = LocalHub()
+        hub = LocalHub(save_dir="/tmp/arcgis-test")
         L = Layer(url)
         run_count(hub, L, {"key": "count"}, lambda project, items: print("seeded", len(items), items[0]["key"], items[-1]["key"]), "local", p)
         run_page(hub, L, {"key": f"p-{a}"}, {**p, "a": a, "b": a + 1999})

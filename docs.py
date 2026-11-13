@@ -73,12 +73,14 @@ def links(page, base):
     return out
 
 
-def safe_path(url):
+def safe_path(url, top="docs"):
+    """Bucket path of a document: <top>/<host>/<path>. Archived copies: top "wayback/<year>", host and path of the original."""
     u = urlsplit(url)
-    p = re.sub(r"[^A-Za-z0-9._/-]+", "_", unquote(u.path)).strip("/")[-180:] or "index"
+    p = re.sub(r"[^A-Za-z0-9._/-]+", "_", unquote(u.path))
+    p = re.sub(r"/{2,}", "/", p).strip("/")[-180:].lstrip("/") or "index"
     if u.query:     # index.php?title=A and ?title=B are different files
         p += "_" + re.sub(r"[^A-Za-z0-9._-]+", "_", unquote(u.query))[:80] + "_" + hashlib.sha1(u.query.encode()).hexdigest()[:8]
-    return f"docs/{u.hostname}/{p}"
+    return f"{top}/{u.hostname}/{p}"
 
 
 def get(hub, s, url, gap):
@@ -240,7 +242,8 @@ def work(hub, s, item, project, gap, on_runner):
                                  "pages": npages, "from": p.get("from", ""), "set": p.get("set", ""), "fetched_at": now})
         hub.complete([item["key"]], "done", fetched=1)
         return
-    path = safe_path(r.url if urlsplit(r.url).hostname else url)
+    path = safe_path(p["original"], "wayback/" + p.get("archived", "")[:4]) if p.get("original") else \
+        safe_path(r.url if urlsplit(r.url).hostname else url)
     files = [(path, body, ctype or "application/octet-stream")]
     rec = {"type": "file", "url": url, "final_url": r.url, "title": p.get("title", ""), "archived": p.get("archived", ""),
            "original": p.get("original", ""), "label": p.get("label", ""), "from": p.get("from", ""),

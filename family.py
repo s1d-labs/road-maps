@@ -235,7 +235,8 @@ PROJECTS += [{
 
 # Road registers of the next states with coded tenders (Odisha, Himachal, Uttar Pradesh, West Bengal; lane P 2026-11-13).
 # Odisha Works: every R&B division page lists its roads (name, km, class totals). Himachal PWD: SH and MDR list, NH list.
-# uppwd.gov.in and pwd.wb.gov.in do not answer dev-vps-3; this tries them from GitHub runners (home page, road pages only).
+# GitHub runners got no answer from any of these four hosts (ConnectTimeout, 2026-11-13), so they are DIRECT: worked on dev-vps-3
+# (Mumbai), which reaches works.odisha.gov.in and hppwd.hp.gov.in. uppwd.gov.in and pwd.wb.gov.in answer neither (kept, not worked).
 DOCS_ANY = r"\.(pdf|xlsx?|csv|zip|docx?)$"
 REG_SITES = [
     ("od-works-docs", "Odisha Works Department: road lists of every R&B circle and division", "works.odisha.gov.in",
@@ -251,7 +252,7 @@ REG_SITES = [
 ]
 PROJECTS += [{
     "name": f"{FAMILY}-{name}", "title": title, "task": "docs", "target": host, "env": {}, "probe": None,
-    "unit_label": "page or document", "record_label": "page or document",
+    "unit_label": "page or document", "record_label": "page or document", "pool": False,
     "items": [{"key": f"p-{k}", "payload": {"kind": "page", "url": u, "docs": DOCS_ANY, "follow": follow, "depth": depth, "set": name}}
               for k, u in starts],
     "workers": 1, "delay_ms": 2000,
@@ -263,7 +264,9 @@ WIKI_PAGES = [
     ("osm-in-roads-odisha", "https://wiki.openstreetmap.org/w/index.php?title=India:Roads/Odisha&action=raw"),
     ("osm-rajasthan-mdr", "https://wiki.openstreetmap.org/w/index.php?title=Rajasthan-MDR&action=raw"),
     ("osm-in-roads", "https://wiki.openstreetmap.org/w/index.php?title=India:Roads&action=raw"),
-] + [(f"wp-sh-{s.lower().replace(' ', '-')}", f"https://en.wikipedia.org/w/index.php?title=List_of_state_highways_in_{s.replace(' ', '_')}&action=raw")
+] + [(f"osm-roads-{s.lower().replace(' ', '-')}", f"https://wiki.openstreetmap.org/w/index.php?title=India/Roads/{s.replace(' ', '_')}&action=raw")
+     for s in ["Odisha", "Uttar Pradesh", "Rajasthan", "Maharashtra", "Himachal Pradesh", "West Bengal", "Uttarakhand", "Punjab",
+               "Jharkhand", "Haryana"]] + [(f"wp-sh-{s.lower().replace(' ', '-')}", f"https://en.wikipedia.org/w/index.php?title=List_of_state_highways_in_{s.replace(' ', '_')}&action=raw")
      for s in ["Maharashtra", "Uttar Pradesh", "Odisha", "Rajasthan", "Himachal Pradesh", "West Bengal", "Uttarakhand", "Punjab, India",
                "Jharkhand", "Haryana", "Madhya Pradesh", "Gujarat", "Karnataka", "Kerala", "Tamil Nadu", "Andhra Pradesh", "Telangana",
                "Bihar", "Assam", "Chhattisgarh", "Goa"]]

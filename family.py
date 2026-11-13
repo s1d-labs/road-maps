@@ -279,3 +279,54 @@ PROJECTS += [{
 }]
 
 PROBES = [{"name": f"{FAMILY}:livingatlas.esri.in", "url": f"{ESRI_IN}/IN_DRRP_Road_2021/MapServer/0?f=json", "expect": "District Rural Road"}]
+
+# Old official road registers that are offline now, read from the Internet Archive (lane Y, 2026-11-14). One CDX query per old
+# state PWD / road agency host (domain match: every sub-host); kept are road lists, road registers and network documents (PDF,
+# XLS, DOC, CSV) and HTML pages whose address names a road list. Tender notices, NITs, results, staff orders and pictures are
+# skipped. Each kept address: its newest archived 200 copy, raw (id_). GitHub runners (archive.org answers them; PDF text beside
+# each PDF). CDX answers are kept in the bucket (cdx/), so the next query for the same host is not needed.
+WAYBACK_KEEP = (r"\.(pdf|xlsx?|csv|docx?)(\?|$)"     # every document of these offline sites (names are often only numbers: NH.pdf)
+                r"|(road[_ -]?list|list[_ -]?of[_ -]?roads|state[_ -]?highways?|statehighway|(?<![a-z])(sh|mdr|odr)(?![a-z])"
+                r"|road[_ -]?length|road[_ -]?network|road[_ -]?inventory|highway[_ -]?list|road[_ -]?register|master)")
+WAYBACK_SKIP = (r"(tender|tennot|/nit|nit[_ -]|e-?nit|\bbids?\b|biddoc|bid[_ -]?doc|corrigend|notice|advt|advertis|result|recruit"
+                r"|transfer|posting|seniority|gradation|salary|pension|gpf|ltc|leave|tel[_ -]?dir|e-?mail|rti[_ -]?act|/sor/"
+                r"|photo|gallery|\.(jpe?g|png|gif|bmp|css|js|ico|zip|rar|exe|mp4)(\?|$))")
+WAYBACK_HOSTS = [   # (set, host): state PWD, road development corporation and road agency sites, old and new names
+    ("up", "uppwd.up.nic.in"), ("up", "uppwd.gov.in"), ("up", "uppwd.nic.in"), ("up", "upeida.up.gov.in"),
+    ("wb", "wbpwd.gov.in"), ("wb", "pwd.wb.gov.in"), ("wb", "wbpwd.nic.in"), ("wb", "wbhdcl.gov.in"),
+    ("rj", "pwd.rajasthan.gov.in"), ("rj", "rajpwd.nic.in"), ("rj", "pwdraj.nic.in"), ("rj", "rsrdc.rajasthan.gov.in"),
+    ("mp", "mppwd.gov.in"), ("mp", "mppwd.nic.in"), ("mp", "mprdc.gov.in"), ("mp", "mprdc.nic.in"),
+    ("gj", "rnbgujarat.org"), ("gj", "roadsandbuildings.gujarat.gov.in"), ("gj", "rnb.gujarat.gov.in"), ("gj", "gsrdc.gujarat.gov.in"),
+    ("ka", "kpwd.kar.nic.in"), ("ka", "pwd.karnataka.gov.in"), ("ka", "kpwd.karnataka.gov.in"), ("ka", "kshipkar.org"),
+    ("ka", "krdcl.karnataka.gov.in"),
+]
+PROJECTS += [{
+    "name": f"{FAMILY}-wayback-registers", "title": "Old state PWD road registers from the Internet Archive (UP, WB, Rajasthan, MP, Gujarat, Karnataka)",
+    "task": "docs", "target": "web.archive.org", "env": {}, "probe": None,
+    "unit_label": "archive query or document", "record_label": "archive query or document",
+    "items": [{"key": "f-uppwd-sh-road-list", "payload": {"kind": "cdx", "url": "uppwd.up.nic.in/pdf/SH_Road_List.pdf", "match": "exact",
+                                                          "keep": "", "skip": "", "set": "up"}}]
+             + [{"key": f"c-{st}-{h}", "payload": {"kind": "cdx", "url": h, "match": "domain", "keep": WAYBACK_KEEP, "skip": WAYBACK_SKIP,
+                                                   "set": st}} for st, h in WAYBACK_HOSTS],
+    "workers": 1, "delay_ms": 4000,
+}]
+
+# OSM wiki road pages under their real titles (lane Y): the guessed "India/Roads/<state>" titles answer 404 (only Odisha exists), so
+# the wiki's own title lists name the pages to copy (raw wikitext).
+OSM_API = "https://wiki.openstreetmap.org/w/api.php"
+OSM_ROADS = r"(road|highway|\bMDR\b|\bSH\b|\bNH\b|-MDR|-SH|expressway)"
+PROJECTS[-2]["items"] += [{"key": f"m-{k}", "payload": {"kind": "mwlist", "api": OSM_API, "prefix": pre, "ns": 0, "keep": OSM_ROADS,
+                                                       "set": "wiki"}}
+                          for k, pre in [("india-colon", "India:"), ("india-slash", "India/"), ("wikiproject-india", "WikiProject India")]]
+assert PROJECTS[-2]["name"].endswith("wiki-lists")
+
+# Kerala GIS hosts again, this time through the hub's Mumbai proxies (lane Y): they did not answer dev-vps-3 or GitHub runners.
+PROJECTS += [{
+    "name": f"{FAMILY}-kerala-proxy", "title": "Kerala GIS hosts: reachability check through an Indian proxy (one GET each)",
+    "task": "probe", "target": "kerala.gov.in", "env": {}, "probe": None, "proxy": "IN",
+    "unit_label": "page", "record_label": "check",
+    "items": [{"key": f"k{i:02d}", "payload": {"url": u}} for i, u in enumerate(KERALA + [
+        "https://klrams.kerala.gov.in/", "https://keralapwd.gov.in/klrams/", "https://iroads.kerala.gov.in/",
+        "https://opensdi.kerala.gov.in/geoserver/wfs?service=WFS&version=1.0.0&request=GetCapabilities"])],
+    "workers": 1, "delay_ms": 2000,
+}]

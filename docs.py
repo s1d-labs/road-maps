@@ -8,10 +8,18 @@ to "depth" steps from the start.
 Payload "kind": "file": one document. It is kept as docs/<host>/<path> with one record (address, title, source page, size, sha256,
 content type). On a GitHub runner, the text of a PDF is also kept (pdftotext -layout, docs/.../<name>.txt), so that parsing reads
 the bucket copy and this server does no PDF work.
+Payload "kind": "cdx": a query to the Internet Archive's Wayback CDX API (web.archive.org/cdx/search/cdx) for an old official site that
+is offline now. "url" + "match" ("prefix", "domain" or "exact"); "keep" is a regex on the archived address (documents of road
+registers); "skip" a regex of addresses not wanted. The CDX answer is kept (cdx/<hash>.json.gz). Each kept address is queued as a
+"file" item for its newest archived 200 copy, read raw (web.archive.org/web/<timestamp>id_/<address>). Long answers continue with
+the CDX resume key (one more "cdx" item).
+Payload "kind": "mwlist": a MediaWiki title list (api.php, list=allpages) from "prefix" in namespace "ns"; titles that match "keep"
+are queued as "file" items of their raw wikitext (index.php?title=...&action=raw). The API answer is kept (mwlist/<hash>.json.gz).
 No login, no form, no captcha. Record ids are the address's hash, so a rerun replaces, never doubles.
 Local test: python docs.py --local <page url> <docs regex> (one page; files under /tmp/docs-test)."""
 import gzip
 import hashlib
+import json
 import html
 import os
 import re
@@ -20,7 +28,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from urllib.parse import urljoin, urlsplit, unquote
+from urllib.parse import quote, urlencode, urljoin, urlsplit, unquote
 
 import requests
 import urllib3
@@ -102,8 +110,101 @@ def pdf_text(body):
             return None
 
 
+CDX = "https://web.archive.org/cdx/search/cdx"
+
+
+def cdx_newest(rows, keep, skip):
+    """CDX json rows (first row = field names) -> {original: newest timestamp} of 200 answers whose address matches keep and not skip.
+    Pure."""
+    if not rows:
+        return {}
+    head, out = rows[0], {}
+    ki, si = re.compile(keep, re.I) if keep else None, re.compile(skip, re.I) if skip else None
+    for row in rows[1:]:
+        if len(row) != len(head):          # the resume key follows an empty row
+            continue
+        d = dict(zip(head, row))
+        o = d.get("original", "")
+        if d.get("statuscode") not in ("200", None) or (ki and not ki.search(o)) or (si and si.search(o)):
+            continue
+        k = re.sub(r"^https?://(www\.)?", "", o).replace(":80/", "/").replace(":443/", "/").rstrip("/").lower()
+        if k not in out or d["timestamp"] > out[k][0]:
+            out[k] = (d["timestamp"], o)
+    return {o: ts for ts, o in out.values()}
+
+
+def cdx_item(hub, s, item, project, gap):
+    p = item["payload"]
+    q = [("url", p["url"]), ("matchType", p.get("match", "prefix")), ("output", "json"),
+         ("fl", "timestamp,original,mimetype,statuscode,length"), ("filter", "statuscode:200"),
+         ("filter", "!mimetype:(image|video|audio|font)/.*"), ("filter", "!mimetype:(text/css|.*javascript.*)"),
+         ("limit", str(p.get("limit", 20000))), ("showResumeKey", "true")]
+    if p.get("resume"):
+        q.append(("resumeKey", p["resume"]))
+    url = CDX + "?" + urlencode(q)
+    now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    r = get(hub, s, url, gap)
+    if r.status_code != 200:
+        hub.record(key_of(url), {"type": "cdx", "url": url, "status": r.status_code, "fetched_at": now})
+        hub.complete([item["key"]], "done", fetched=0)
+        return
+    rows = r.json() if r.content.strip() else []
+    path = f"cdx/{key_of(url)}.json.gz"
+    hub.upload_many([(path, gzip.compress(r.content, 6), "application/gzip")])
+    found = cdx_newest(rows, p.get("keep", ""), p.get("skip", ""))
+    new = [{"key": "f-" + key_of(o), "payload": {"kind": "file", "url": f"https://web.archive.org/web/{ts}id_/{o}", "title": o,
+                                                 "label": f"wayback {ts}", "from": p["url"], "set": p.get("set", ""), "archived": ts,
+                                                 "original": o}}
+           for o, ts in sorted(found.items())]
+    resume = rows[-1][0] if rows and len(rows) > 2 and rows[-2] == [] else ""
+    if resume:
+        new.append({"key": "c-" + key_of(url + resume), "payload": {**p, "resume": resume}})
+    if new:
+        seed_queue(project, new)
+    hub.record(key_of(url), {"type": "cdx", "url": url, "query": p["url"], "file": path, "captures": max(0, len(rows) - 1),
+                             "kept": len(found), "resume": bool(resume), "set": p.get("set", ""), "fetched_at": now})
+    hub.complete([item["key"]], "done", fetched=1)
+
+
+def mwlist_item(hub, s, item, project, gap):
+    p = item["payload"]
+    api = p["api"]
+    q = {"action": "query", "list": "allpages", "apprefix": p["prefix"], "apnamespace": str(p.get("ns", 0)), "aplimit": "500",
+         "format": "json"}
+    if p.get("cont"):
+        q["apcontinue"] = p["cont"]
+    url = api + "?" + urlencode(q)
+    now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    r = get(hub, s, url, gap)
+    if r.status_code != 200:
+        hub.record(key_of(url), {"type": "mwlist", "url": url, "status": r.status_code, "fetched_at": now})
+        hub.complete([item["key"]], "done", fetched=0)
+        return
+    data = r.json()
+    path = f"mwlist/{key_of(url)}.json.gz"
+    hub.upload_many([(path, gzip.compress(r.content, 6), "application/gzip")])
+    titles = [x["title"] for x in data.get("query", {}).get("allpages", [])]
+    keep = re.compile(p.get("keep") or ".", re.I)
+    index = api.rsplit("/", 1)[0] + "/index.php"
+    new = [{"key": "f-" + key_of(t), "payload": {"kind": "file", "url": f"{index}?title={quote(t.replace(' ', '_'), safe='/:')}&action=raw",
+                                                 "title": t, "from": url, "set": p.get("set", "")}}
+           for t in titles if keep.search(t)]
+    cont = data.get("continue", {}).get("apcontinue")
+    if cont:
+        new.append({"key": "m-" + key_of(url + cont), "payload": {**p, "cont": cont}})
+    if new:
+        seed_queue(project, new)
+    hub.record(key_of(url), {"type": "mwlist", "url": url, "file": path, "titles": titles, "kept": sum(1 for t in titles if keep.search(t)),
+                             "set": p.get("set", ""), "fetched_at": now})
+    hub.complete([item["key"]], "done", fetched=1)
+
+
 def work(hub, s, item, project, gap, on_runner):
     p = item["payload"]
+    if p["kind"] == "cdx":
+        return cdx_item(hub, s, item, project, gap)
+    if p["kind"] == "mwlist":
+        return mwlist_item(hub, s, item, project, gap)
     url = p["url"]
     now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     r = get(hub, s, url, gap)
@@ -141,7 +242,8 @@ def work(hub, s, item, project, gap, on_runner):
         return
     path = safe_path(r.url if urlsplit(r.url).hostname else url)
     files = [(path, body, ctype or "application/octet-stream")]
-    rec = {"type": "file", "url": url, "final_url": r.url, "title": p.get("title", ""), "label": p.get("label", ""), "from": p.get("from", ""),
+    rec = {"type": "file", "url": url, "final_url": r.url, "title": p.get("title", ""), "archived": p.get("archived", ""),
+           "original": p.get("original", ""), "label": p.get("label", ""), "from": p.get("from", ""),
            "set": p.get("set", ""), "file": path, "bytes": len(body), "sha256": sha, "content_type": ctype,
            "last_modified": r.headers.get("last-modified", ""), "fetched_at": now}
     if on_runner and (body[:5] == b"%PDF-"):

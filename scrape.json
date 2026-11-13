@@ -1,7 +1,8 @@
 {
   "family": "road-maps",
-  "about": "Public road maps: line geometry of India's roads (PMGSY DRRP, national and state road networks with road codes and chainage) from public ArcGIS and WFS map services",
+  "about": "Public road maps: line geometry of India's roads (PMGSY DRRP, national and state road networks with road codes and chainage) from public ArcGIS and WFS map services; and road registers (lists of roads with road numbers, names and ends) that state departments publish as documents",
   "setup": [
+    "sudo apt-get install -y -qq poppler-utils || true",
     "pip install -r requirements.txt"
   ],
   "tasks": {
@@ -16,6 +17,10 @@
     "probe": [
       "python",
       "probe.py"
+    ],
+    "docs": [
+      "python",
+      "docs.py"
     ]
   }
 }

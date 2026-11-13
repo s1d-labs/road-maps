@@ -192,4 +192,45 @@ PROJECTS += [{
     "workers": 1, "delay_ms": 2000,
 }]
 
+# Maharashtra road register as a map (2026-11-13, lane P): MRSAC's "smart village" transport layer is the state's Road Development
+# Plan 2001-21 network: 367,028 road segments in 34 districts, each with the plan road number (DP_01_21: SH-204, MDR-147, ODR-72,
+# VR-122), SRIMS code, PMGSY code, from and to places, total length and chainage. Open, no token (the admin2019/Hosted services need a
+# token and are not used). Also the habitation points of the same service, and the MH-UID PWD and gram panchayat road works (Wardha).
+MRSAC = "https://gsc.mrsac.org.in/server/rest/services"
+DIRECT_MH_SV = ("mh-sv", "Maharashtra road register: Road Development Plan 2001-21 road numbers, from and to places, lengths (MRSAC smart village)",
+                "gsc.mrsac.org.in", 2000, 1000, {"fmt": "json"}, [
+                    ("mh-sv-transport", f"{MRSAC}/smart_village/sv_trans_hab/MapServer/0"),
+                    ("mh-sv-habitation", f"{MRSAC}/smart_village/sv_trans_hab/MapServer/1"),
+                    ("mh-uid-pwd-roads", f"{MRSAC}/mhuid/Public_Works_Division/MapServer/4"),
+                    ("mh-uid-gp-roads", f"{MRSAC}/mhuid/Village_Panchayat_Department/MapServer/10")])
+PROJECTS += [
+    {
+        "name": f"{FAMILY}-{name}", "title": title, "task": "arcgis", "target": target, "env": {}, "probe": None, "pool": False,
+        "unit_label": f"page of up to {size} features", "record_label": "page",
+        "items": [{"key": f"count-{layer}", "payload": {"url": url, "name": layer, "size": size, **extra}} for layer, url in layers],
+        "workers": 1, "delay_ms": delay,
+    }
+    for name, title, target, delay, size, extra, layers in [DIRECT_MH_SV]
+]
+
+# Road registers published as documents (task "docs"): listing pages are kept, their documents (PDF, XLS) go to the bucket with the
+# row title, and on GitHub runners the PDF text is kept beside each PDF. Maharashtra PWD (S3WaaS site, files on cdnbbsr.s3waas.gov.in):
+# every document and publication list (English and Marathi), incl. the region lists of roads and bridges, the Amritkal Road
+# Development Plan 2025-2047, and the government resolutions that move roads between classes (VR-370 into MDR-84).
+MH_PWD = "https://pwd.maharashtra.gov.in"
+MH_DOCS = r"cdnbbsr\.s3waas\.gov\.in/.*\.(pdf|xlsx?|csv|zip|docx?)$"
+MH_FOLLOW = r"/(en/)?(documents|publications|document-category|publication-type|publication)/"
+PROJECTS += [{
+    "name": f"{FAMILY}-mh-pwd-docs", "title": "Maharashtra PWD documents: lists of roads, road development plans, road class resolutions",
+    "task": "docs", "target": "pwd.maharashtra.gov.in", "env": {}, "probe": None,
+    "unit_label": "page or document", "record_label": "page or document",
+    "items": [{"key": "p-" + k, "payload": {"kind": "page", "url": f"{MH_PWD}/{path}", "docs": MH_DOCS, "follow": MH_FOLLOW, "depth": 25,
+                                             "set": "mh-pwd"}}
+              for k, path in [("en-road-bridges", "en/document-category/road-bridges/"), ("mr-road-bridges", "document-category/road-bridges/"),
+                              ("en-documents", "en/documents/"), ("mr-documents", "documents/"),
+                              ("en-publications", "en/publications/"), ("mr-publications", "publications/"),
+                              ("en-rdp", "en/publication-type/road-development-plan/"), ("mr-rdp", "publication-type/road-development-plan/")]],
+    "workers": 1, "delay_ms": 2000,
+}]
+
 PROBES = [{"name": f"{FAMILY}:livingatlas.esri.in", "url": f"{ESRI_IN}/IN_DRRP_Road_2021/MapServer/0?f=json", "expect": "District Rural Road"}]

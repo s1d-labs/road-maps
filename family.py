@@ -330,3 +330,14 @@ PROJECTS += [{
         "https://opensdi.kerala.gov.in/geoserver/wfs?service=WFS&version=1.0.0&request=GetCapabilities"])],
     "workers": 1, "delay_ms": 2000,
 }]
+
+# The OSM wiki keeps the state lists under "<State>-SH" / "<State>-MDR" titles ("India:Roads/<State>" only redirects there): one title
+# list per state prefix, keeping the road-class pages.
+OSM_STATES = ["Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa", "Gujarat", "Haryana", "Himachal Pradesh",
+              "Jharkhand", "Karnataka", "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya", "Mizoram", "Nagaland",
+              "Odisha", "Orissa", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu", "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand",
+              "West Bengal", "Jammu and Kashmir", "Delhi", "Puducherry"]
+PROJECTS[-3]["items"] += [{"key": f"m-st-{st.lower().replace(' ', '-')}", "payload": {"kind": "mwlist", "api": OSM_API, "prefix": f"{st}", "ns": 0,
+                                                                                    "keep": r"-(SH|MDR|ODR|NH|SH-list|Roads?)\b", "set": "wiki"}}
+                          for st in OSM_STATES]
+assert PROJECTS[-3]["name"].endswith("wiki-lists")

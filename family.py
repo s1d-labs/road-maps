@@ -233,4 +233,46 @@ PROJECTS += [{
     "workers": 1, "delay_ms": 2000,
 }]
 
+# Road registers of the next states with coded tenders (Odisha, Himachal, Uttar Pradesh, West Bengal; lane P 2026-11-13).
+# Odisha Works: every R&B division page lists its roads (name, km, class totals). Himachal PWD: SH and MDR list, NH list.
+# uppwd.gov.in and pwd.wb.gov.in do not answer dev-vps-3; this tries them from GitHub runners (home page, road pages only).
+DOCS_ANY = r"\.(pdf|xlsx?|csv|zip|docx?)$"
+REG_SITES = [
+    ("od-works-docs", "Odisha Works Department: road lists of every R&B circle and division", "works.odisha.gov.in",
+     [("dpir", "https://works.odisha.gov.in/en/design-planning-and-investigation-roads-wing")],
+     r"/design-planning-and-investigation-roads-wing/", 3),
+    ("hp-pwd-docs", "Himachal PWD: state highways and major district roads, national highways", "hppwd.hp.gov.in",
+     [("sh-mdr", "https://hppwd.hp.gov.in/sh-and-mdrs"), ("nh", "https://hppwd.hp.gov.in/national-highways-1"),
+      ("works", "https://hppwd.hp.gov.in/works"), ("schemes", "https://hppwd.hp.gov.in/schemes")], r"/(sh-and-mdrs|national-highways|works)", 1),
+    ("up-pwd-docs", "Uttar Pradesh PWD: road pages and documents (a try from GitHub runners)", "uppwd.gov.in",
+     [("home", "https://uppwd.gov.in/")], r"(?i)(road|sadak|marg|highway|network|core|inventory|list|page)", 2),
+    ("wb-pwd-docs", "West Bengal PWD: road pages and documents (a try from GitHub runners)", "pwd.wb.gov.in",
+     [("home", "https://pwd.wb.gov.in/")], r"(?i)(road|highway|network|inventory|list|division)", 2),
+]
+PROJECTS += [{
+    "name": f"{FAMILY}-{name}", "title": title, "task": "docs", "target": host, "env": {}, "probe": None,
+    "unit_label": "page or document", "record_label": "page or document",
+    "items": [{"key": f"p-{k}", "payload": {"kind": "page", "url": u, "docs": DOCS_ANY, "follow": follow, "depth": depth, "set": name}}
+              for k, u in starts],
+    "workers": 1, "delay_ms": 2000,
+} for name, title, host, starts, follow, depth in REG_SITES]
+
+# Community lists that copy the official state highway and district road numbers with their ends (OSM wiki: ODbL; Wikipedia:
+# CC BY-SA). Raw wikitext, one file per page. Used only where no official list answers; every row keeps its source.
+WIKI_PAGES = [
+    ("osm-in-roads-odisha", "https://wiki.openstreetmap.org/w/index.php?title=India:Roads/Odisha&action=raw"),
+    ("osm-rajasthan-mdr", "https://wiki.openstreetmap.org/w/index.php?title=Rajasthan-MDR&action=raw"),
+    ("osm-in-roads", "https://wiki.openstreetmap.org/w/index.php?title=India:Roads&action=raw"),
+] + [(f"wp-sh-{s.lower().replace(' ', '-')}", f"https://en.wikipedia.org/w/index.php?title=List_of_state_highways_in_{s.replace(' ', '_')}&action=raw")
+     for s in ["Maharashtra", "Uttar Pradesh", "Odisha", "Rajasthan", "Himachal Pradesh", "West Bengal", "Uttarakhand", "Punjab, India",
+               "Jharkhand", "Haryana", "Madhya Pradesh", "Gujarat", "Karnataka", "Kerala", "Tamil Nadu", "Andhra Pradesh", "Telangana",
+               "Bihar", "Assam", "Chhattisgarh", "Goa"]]
+PROJECTS += [{
+    "name": f"{FAMILY}-wiki-lists", "title": "State highway and district road lists from Wikipedia and the OSM wiki (raw wikitext)",
+    "task": "docs", "target": "wikipedia.org", "env": {}, "probe": None,
+    "unit_label": "page", "record_label": "page",
+    "items": [{"key": f"f-{k}", "payload": {"kind": "file", "url": u, "title": k, "set": "wiki"}} for k, u in WIKI_PAGES],
+    "workers": 1, "delay_ms": 2000,
+}]
+
 PROBES = [{"name": f"{FAMILY}:livingatlas.esri.in", "url": f"{ESRI_IN}/IN_DRRP_Road_2021/MapServer/0?f=json", "expect": "District Rural Road"}]

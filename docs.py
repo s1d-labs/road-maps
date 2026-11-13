@@ -68,6 +68,8 @@ def links(page, base):
 def safe_path(url):
     u = urlsplit(url)
     p = re.sub(r"[^A-Za-z0-9._/-]+", "_", unquote(u.path)).strip("/")[-180:] or "index"
+    if u.query:     # index.php?title=A and ?title=B are different files
+        p += "_" + re.sub(r"[^A-Za-z0-9._-]+", "_", unquote(u.query))[:80] + "_" + hashlib.sha1(u.query.encode()).hexdigest()[:8]
     return f"docs/{u.hostname}/{p}"
 
 

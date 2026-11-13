@@ -6,7 +6,8 @@ DescribeFeatureType answer, then queues the pages) and "<layer>-p-<start>" (feat
 payload "sort" names the field to sort by, for layers without a primary key). A page file is <layer>/<start>.geojson.gz; a record per
 page, id "<layer>-<start>", with the number of features and the file. A page is checked: it must hold the number of features that
 the count promised for that range.
-Payload: {"url": WFS endpoint, "type": typeName, "name": layer name in the bucket, "size": page size, "sort": optional field}.
+Payload: {"url": WFS endpoint, "type": typeName, "name": layer name in the bucket, "size": page size, "sort": optional field,
+"props": optional comma list of attributes (attribute-only copy for layers whose geometry the server cannot write)}.
 Local test: python wfs.py --local <wfs url> <typeName> (one page, files saved under /tmp/wfs-test)."""
 import gzip
 import os
@@ -51,11 +52,13 @@ class Wfs:
     def describe(self, type_name):
         return self.get(request="DescribeFeatureType", typeNames=type_name).content
 
-    def page(self, type_name, start, size, sort=None):
+    def page(self, type_name, start, size, sort=None, props=None):
         params = {"request": "GetFeature", "typeNames": type_name, "outputFormat": "application/json", "srsName": "EPSG:4326",
                   "count": size, "startIndex": start}
         if sort:
             params["sortBy"] = sort
+        if props:       # attribute list: for layers whose stored geometry makes the server fail (NHAI: java.io.IOException)
+            params["propertyName"] = props
         r = self.get(**params)
         return r.json(), r.content
 
@@ -73,7 +76,7 @@ def run_count(hub, W, item, seed, project, p):
 
 def run_page(hub, W, item, p):
     a = p["start"]
-    d, raw = W.page(p["type"], a, p["size"], p.get("sort"))
+    d, raw = W.page(p["type"], a, p["size"], p.get("sort"), p.get("props"))
     got = len(d.get("features") or [])
     if got != p["want"]:
         hub.failure("short-page", item["key"], f"wanted {p['want']}, got {got}")

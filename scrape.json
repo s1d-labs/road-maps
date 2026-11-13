@@ -12,6 +12,10 @@
     "wfs": [
       "python",
       "wfs.py"
+    ],
+    "probe": [
+      "python",
+      "probe.py"
     ]
   }
 }

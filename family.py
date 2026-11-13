@@ -49,8 +49,16 @@ PROJECTS = [
     for name, url, title in LAYERS
 ]
 
-# Esri India's "Road_Centerline_Bharatmala" (28,374 NH/SH lines with rdcodeprm) is not copied: its item terms say "Users are not
-# permitted to export data for offline use" (owner to decide).
+# Esri India's "Road_Centerline_Bharatmala": 28,374 NH/SH lines with rdcodeprm/rdcodesec. The item terms limit offline export; the
+# owner decided on 2026-11-13 that personal and team use is fine ("use everything").
+LA = "https://livingatlas.esri.in/server/rest/services"
+PROJECTS += [{
+    "name": f"{FAMILY}-bharatmala", "title": "National and state highways with road codes (Esri India Bharatmala road network)",
+    "task": "arcgis", "target": "livingatlas.esri.in", "env": {}, "probe": None,
+    "unit_label": "page of 2000 features", "record_label": "page",
+    "items": [{"key": "count", "payload": {"url": f"{LA}/Road_Network/Road_Centerline_Bharatmala/MapServer/0", "name": "bharatmala", "size": 2000}}],
+    "workers": 1, "delay_ms": 1000,
+}]
 
 APSAC = "https://apsac.ap.gov.in/gisserver/rest/services"
 AP_RB = f"{APSAC}/Gatishakti/Roads_Buildings/MapServer"
@@ -100,10 +108,11 @@ DIRECT_TG = ("tg-rb", "Telangana roads with road id and start and end chainage: 
                  ("tg-rb-lanes", f"{TGRAC}/RnB_Folder/RnB_Query/MapServer/2"), ("tg-nh", f"{TGRAC}/RnB_Folder/RnB_Roads/MapServer/1"),
                  ("tg-sh", f"{TGRAC}/RnB_Folder/RnB_Roads/MapServer/3"), ("tg-mdr", f"{TGRAC}/RnB_Folder/RnB_Roads/MapServer/4"),
                  ("tg-odr", f"{TGRAC}/RnB_Folder/RnB_Roads/MapServer/5"), ("tg-rb-lanes-2", f"{TGRAC}/RnB_Folder/RnB_Roads/MapServer/12")])
-# Haryana: PWD B&R roads (HSAC, PM Gati Shakti service). The larger "Mharisadak_Staging" layer (117,130 roads) is not copied: it is a
-# staging service whose fields hold user login ids and officers' phone numbers (owner to decide).
-DIRECT_HR = ("hr-pwd", "Haryana PWD B&R roads with road id, circle, division and length (HSAC)", "hsacggm.in", 2000, 1000, {"fmt": "json"},
-             [("hr-pwd-roads", "https://hsacggm.in/server/rest/services/PMGatiShakti/Haryana_Roads/MapServer/0")])
+# Haryana: PWD B&R roads (HSAC, PM Gati Shakti service) and the "Mharisadak_Staging" layer (117,130 roads of all owners, road_catog
+# free text). Mharisadak fields hold user login ids (ur_id) and officers' phone numbers and email (*_dlp): stored, never shown.
+DIRECT_HR = ("hr-pwd", "Haryana roads: PWD B&R roads and the Mharisadak road register of all owners (HSAC)", "hsacggm.in", 2000, 1000,
+             {"fmt": "json"}, [("hr-pwd-roads", "https://hsacggm.in/server/rest/services/PMGatiShakti/Haryana_Roads/MapServer/0"),
+                               ("hr-mharisadak", "https://hsacggm.in/server/rest/services/Mharisadak_Staging/mharisadak_roads/MapServer/0")])
 # Maharashtra: the only open coded road layer found is the Wardha district works layer (ODR/VR numbers, PWD code) on MRSAC.
 DIRECT_MH = ("mh-wardha", "Maharashtra (Wardha district) roads with ODR/VR number and PWD road code (MRSAC)", "gsc.mrsac.org.in", 2000, 1000,
              {"fmt": "json"}, [("mh-wardha-roads", "https://gsc.mrsac.org.in/server/rest/services/mhuid/Works_Department/MapServer/12")])
@@ -149,6 +158,37 @@ PROJECTS += [{
     "unit_label": "page of 500 features", "record_label": "page",
     "items": [{"key": f"count-nhai-{t.lower().replace('_', '-')}", "payload": {"url": NHAI, "type": f"NHAI:{t}", "name": f"nhai-{t.lower().replace('_', '-')}",
                                                                              "size": 500}} for t in NHAI_LAYERS],
+    "workers": 1, "delay_ms": 2000,
+}]
+# Added 2026-11-13 (owner: "download everything"): accident spots, land plots (owner names, survey numbers: stored, never shown),
+# and attribute-only copies of three layers whose stored geometry makes the server fail (java.io.IOException). The attribute
+# "ae/ie" cannot be requested (the slash breaks the server), so it is left out; start/end lat-long and chainage are kept.
+NHAI_ATTR = {
+    "NSV_Distress_Data_WMS": "id,objectid,fid_1,start_lat,start_lon,end_lat,end_lon,condition,start_chai,unnamed__6,unnamed__7,color,upc,category,unnamed__8,shape_leng",
+    "upc_wise_alignments_layers": "id,upc,length,lane,concession,scheme,mode,piu,ro,state,phase,lane_2,project_ty,project_na,current_st,starting_l,end_latitu,start_long,end_long,nh_new,alignment_id,green_brown_field,parliaments_name",
+    "adv_nhai_alignments_layers": "id,upc,length,lane,concession,scheme,mode,piu,ro,state,phase,lane_2,project_ty,project_na,current_st,starting_l,end_latitu,start_long,end_long,nh_new,alignment_id,green_brown_field,parliaments_name,adv_total_capital_cost,adv_cumphysical_progress_tilllastmonth,adv_cumfinancial_progress_tilllastmonth,adv_project_name,adv_lanes,adv_mode,adv_ro_contact_no,adv_pd_contact_no,drone_video_name,adv_appointed_date,adv_scheduled_completion_date,adv_length,loa_date,district_name,adv_pkg_name,nsv_availability",
+}
+PROJECTS[-1]["items"] += [
+    {"key": f"count-nhai-{t.lower().replace('_', '-')}", "payload": {"url": NHAI, "type": f"NHAI:{t}", "name": f"nhai-{t.lower().replace('_', '-')}", "size": 500}}
+    for t in ["RoadAccident_Spot_GIS_Layer", "Land_Arbitration_Plot_Layer"]
+] + [
+    {"key": f"count-nhai-{t.lower().replace('_', '-')}-attrs", "payload": {"url": NHAI, "type": f"NHAI:{t}", "name": f"nhai-{t.lower().replace('_', '-')}-attrs",
+                                                                          "size": 500, "sort": "id ASC", "props": props}}
+    for t, props in NHAI_ATTR.items()
+]
+
+# Kerala: the state GIS hosts do not answer dev-vps-3 (no route / 403 / timeout). One GET per host page from a GitHub runner abroad.
+KERALA = ["https://opensdi.kerala.gov.in/", "https://opensdi.kerala.gov.in/api/v2/datasets?page_size=100",
+          "https://opensdi.kerala.gov.in/geoserver/ows?service=WFS&version=2.0.0&request=GetCapabilities",
+          "https://ksdi.kerala.gov.in/", "https://ksdi.kerala.gov.in/geoserver/ows?service=WFS&request=GetCapabilities",
+          "https://geoportal.kerala.gov.in/", "https://geoportal.kerala.gov.in/geoserver/ows?service=WFS&request=GetCapabilities",
+          "https://gis.kerala.gov.in/", "https://gis.kerala.gov.in/arcgis/rest/services?f=json", "https://maps.kerala.gov.in/",
+          "http://103.35.198.65:8181/kpwd.gis/", "https://keralapwd.gov.in/", "https://www.ksrec.kerala.gov.in/"]
+PROJECTS += [{
+    "name": f"{FAMILY}-kerala-probe", "title": "Kerala GIS hosts: reachability check from a GitHub runner (one GET each)",
+    "task": "probe", "target": "kerala.gov.in", "env": {}, "probe": None,
+    "unit_label": "page", "record_label": "check",
+    "items": [{"key": f"k{i:02d}", "payload": {"url": u}} for i, u in enumerate(KERALA)],
     "workers": 1, "delay_ms": 2000,
 }]
 

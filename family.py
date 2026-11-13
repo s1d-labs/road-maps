@@ -289,7 +289,7 @@ WAYBACK_KEEP = (r"\.(pdf|xlsx?|csv|docx?)(\?|$)"     # every document of these o
                 r"|(road[_ -]?list|list[_ -]?of[_ -]?roads|state[_ -]?highways?|statehighway|(?<![a-z])(sh|mdr|odr)(?![a-z])"
                 r"|road[_ -]?length|road[_ -]?network|road[_ -]?inventory|highway[_ -]?list|road[_ -]?register|master)")
 WAYBACK_SKIP = (r"(tender|tennot|/nit|nit[_ -]|e-?nit|\bbids?\b|biddoc|bid[_ -]?doc|corrigend|notice|advt|advertis|result|recruit"
-                r"|transfer|posting|seniority|gradation|salary|pension|gpf|ltc|leave|tel[_ -]?dir|e-?mail|rti[_ -]?act|/sor/|addendum|boq|rfp|reoi|\beoi\b|pre-?bid"
+                r"|transfer|posting|seniority|gradation|salary|pension|gpf|ltc|leave|tel[_ -]?dir|e-?mail|rti[_ -]?act|/sor/|addendum|boq|rfp|reoi|\beoi\b|pre-?bid|achal|sampatti|/career|immovable|property[_ -]?return"
                 r"|photo|gallery|\.(jpe?g|png|gif|bmp|css|js|ico|zip|rar|exe|mp4)(\?|$))")
 WAYBACK_HOSTS = [   # (set, host): state PWD, road development corporation and road agency sites, old and new names
     ("up", "uppwd.up.nic.in"), ("up", "uppwd.gov.in"), ("up", "uppwd.nic.in"), ("up", "upeida.up.gov.in"),

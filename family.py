@@ -341,3 +341,11 @@ PROJECTS[-3]["items"] += [{"key": f"m-st-{st.lower().replace(' ', '-')}", "paylo
                                                                                     "keep": r"-(SH|MDR|ODR|NH|SH-list|Roads?)\b", "set": "wiki"}}
                           for st in OSM_STATES]
 assert PROJECTS[-3]["name"].endswith("wiki-lists")
+
+# Kerala PWD dashboard asset lists (roads per division and category, 2024), linked from the OSM wiki Kerala-MDR page as Internet
+# Archive copies; the live dashboard does not answer (lane Y).
+PROJECTS[[p["name"] for p in PROJECTS].index(f"{FAMILY}-wayback-registers")]["items"] += [
+    {"key": "c-kl-pwd-dashboard", "payload": {"kind": "cdx", "url": "keralapwd.gov.in:8080/pwddashboard/assetresponse.jsp", "match": "prefix",
+                                              "keep": "", "skip": "", "set": "kl"}},
+    {"key": "c-kl-pwd-dashboard-80", "payload": {"kind": "cdx", "url": "keralapwd.gov.in/pwddashboard/", "match": "prefix",
+                                                 "keep": r"assetresponse|asset|road", "skip": "", "set": "kl"}}]

@@ -9,5 +9,5 @@ if PROBES:
 for p in PROJECTS:
     register_project(p["name"], title=p["title"], unit_label=p["unit_label"], record_label=p["record_label"])
     set_pool(p["name"], FAMILY, p["task"], target=p["target"], env=p["env"], probe=p["probe"], max_workers=p["workers"], threads=1,
-             delay_ms=p["delay_ms"])
+             delay_ms=p["delay_ms"], proxy=p.get("proxy") or "", pool=p.get("pool", True))   # pool=False: DIRECT, workers on dev-vps-3
     print(p["name"], "queue:", seed_queue(p["name"], p["items"]))

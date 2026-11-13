@@ -1,6 +1,6 @@
 {
   "family": "road-maps",
-  "about": "Public road maps: line geometry of India's rural roads (PMGSY DRRP and proposals) and other public map services",
+  "about": "Public road maps: line geometry of India's roads (PMGSY DRRP, national and state road networks with road codes and chainage) from public ArcGIS and WFS map services",
   "setup": [
     "pip install -r requirements.txt"
   ],
@@ -8,6 +8,10 @@
     "arcgis": [
       "python",
       "arcgis.py"
+    ],
+    "wfs": [
+      "python",
+      "wfs.py"
     ]
   }
 }

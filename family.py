@@ -361,7 +361,9 @@ PROJECTS[[p["name"] for p in PROJECTS].index(f"{FAMILY}-wayback-registers")]["it
 #   The village road (140,608) and other road (40,297) layers have empty code and name fields: not copied.
 # - Madhya Pradesh RAMS (rams.mp.gov.in): "SearchAllRoad", every PWD/MPRDC road segment (11,718) with road number, category,
 #   start and end place names, chainage from/to, division; and the NH layer (96). road-works-mp-rams (lane W) holds the SH and MDR
-#   layers; its offset paging of SearchAllRoad failed, so here it is paged by object id. Broken certificate chain: verify off.
+#   layers; its offset paging of SearchAllRoad failed. SearchAllRoad also gives a different count on each call (11,718, 559, 546)
+#   and fails ranges, so the same road join is read from the BRIDGE service (layer 1, a stable 11,718), paged by object id.
+#   Broken certificate chain: verify off.
 # - Bihar RCD OPRMC roads (1,000 MDR/SH with section start/end, division) and Indo-Nepal border roads (19); Bihar RWD village roads
 #   (90,050 PMGSY DRRP lines, 1,837 of them with the PMGSY package id).
 # - Andhra Pradesh Panchayat Raj PMGSY core network (16,435 lines: core network number T03, DRRP id, road name, length).
@@ -381,7 +383,7 @@ PROJECTS += [
              ("jh-pmgsy", "https://stategis.jharkhand.gov.in/arcgis/rest/services/JSAC/PMGSY/MapServer/1")]),
         ("mp-rams", "Madhya Pradesh: every PWD and MPRDC road segment with road number, ends and chainage; NH (MPRDC RAMS)",
          "rams.mp.gov.in", 3000, 500, {"fmt": "json", "verify": False}, [
-             ("mp-all-roads", "https://rams.mp.gov.in/arcgis/rest/services/mprams/SearchAllRoad/MapServer/0"),
+             ("mp-all-roads", "https://rams.mp.gov.in/arcgis/rest/services/mprams/BRIDGE/MapServer/1"),
              ("mp-nh", "https://rams.mp.gov.in/arcgis/rest/services/mprams_additional_layer/NH/MapServer/0")]),
     ]
 ]

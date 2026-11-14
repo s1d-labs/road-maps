@@ -353,3 +353,74 @@ PROJECTS[[p["name"] for p in PROJECTS].index(f"{FAMILY}-wayback-registers")]["it
     {"key": "c-kl-pwd-domain", "payload": {"kind": "cdx", "url": "keralapwd.gov.in", "match": "domain",
                                            "keep": r"assetresponse|pwddashboard|road[_ -]?list|list[_ -]?of[_ -]?roads|\b(mdr|sh|odr)\b|register|inventory",
                                            "skip": WAYBACK_SKIP, "set": "kl"}}]
+
+# Lane C2 (2026-11-14, owner: "find more state road layers ... download GIS points using API"). New open ArcGIS layers found by a
+# scan of state GIS servers (all DIRECT on dev-vps-3, one worker, 2-3 s pause; GitHub runners were not tried on these hosts):
+# - Jharkhand JSAC (stategis.jharkhand.gov.in): NH (NH_CODE, NH_NAME, lanes, length), SH (SH_NAME "SH7", length), district roads
+#   (468, no code filled), PMGSY roads (11,729: core network road number T01/L021, PLAN_RD_ID, ER_ID, road name, block, district).
+#   The village road (140,608) and other road (40,297) layers have empty code and name fields: not copied.
+# - Madhya Pradesh RAMS (rams.mp.gov.in): "SearchAllRoad", every PWD/MPRDC road segment (11,718) with road number, category,
+#   start and end place names, chainage from/to, division; and the NH layer (96). road-works-mp-rams (lane W) holds the SH and MDR
+#   layers; its offset paging of SearchAllRoad failed, so here it is paged by object id. Broken certificate chain: verify off.
+# - Bihar RCD OPRMC roads (1,000 MDR/SH with section start/end, division) and Indo-Nepal border roads (19); Bihar RWD village roads
+#   (90,050 PMGSY DRRP lines, 1,837 of them with the PMGSY package id).
+# - Andhra Pradesh Panchayat Raj PMGSY core network (16,435 lines: core network number T03, DRRP id, road name, length).
+PROJECTS += [
+    {
+        "name": f"{FAMILY}-{name}", "title": title, "task": "arcgis", "target": target, "env": {}, "probe": None, "pool": False,
+        "unit_label": f"page of up to {size} features", "record_label": "page",
+        "items": [{"key": f"count-{layer}", "payload": {"url": url, "name": layer, "size": size, **extra}} for layer, url in layers],
+        "workers": 1, "delay_ms": delay,
+    }
+    for name, title, target, delay, size, extra, layers in [
+        ("jh", "Jharkhand roads: NH, SH, district roads and PMGSY roads with core network numbers (JSAC)", "stategis.jharkhand.gov.in",
+         2000, 1000, {"fmt": "json"}, [
+             ("jh-nh", "https://stategis.jharkhand.gov.in/arcgis/rest/services/JSAC/Transportation_Infra/MapServer/2"),
+             ("jh-sh", "https://stategis.jharkhand.gov.in/arcgis/rest/services/JSAC/Transportation_Infra/MapServer/3"),
+             ("jh-dr", "https://stategis.jharkhand.gov.in/arcgis/rest/services/JSAC/Transportation_Infra/MapServer/4"),
+             ("jh-pmgsy", "https://stategis.jharkhand.gov.in/arcgis/rest/services/JSAC/PMGSY/MapServer/1")]),
+        ("mp-rams", "Madhya Pradesh: every PWD and MPRDC road segment with road number, ends and chainage; NH (MPRDC RAMS)",
+         "rams.mp.gov.in", 3000, 500, {"fmt": "json", "verify": False}, [
+             ("mp-all-roads", "https://rams.mp.gov.in/arcgis/rest/services/mprams/SearchAllRoad/MapServer/0"),
+             ("mp-nh", "https://rams.mp.gov.in/arcgis/rest/services/mprams_additional_layer/NH/MapServer/0")]),
+    ]
+]
+_ix = {p["name"]: i for i, p in enumerate(PROJECTS)}
+PROJECTS[_ix[f"{FAMILY}-bihar-rcd"]]["items"] += [
+    {"key": f"count-{layer}", "payload": {"url": url, "name": layer, "size": 200, "fmt": "json"}} for layer, url in [
+        ("br-oprmc", f"{BIHAR}/OPRMC_Roads/MapServer/0"), ("br-indo-nepal", f"{BIHAR}/INDO_NEPAL_ROADS/MapServer/0"),
+        ("br-rwd-village", "https://gisserver.bihar.gov.in/arcgis/rest/services/RWD/Village_Road/MapServer/0")]]
+PROJECTS[_ix[f"{FAMILY}-ap-rb"]]["items"] += [
+    {"key": "count-ap-pr-core-network", "payload": {"url": f"{APSAC}/Gatishakti/PachayatRaj/MapServer/4", "name": "ap-pr-core-network",
+                                                    "size": 100, "fmt": "json"}}]
+
+# Road layers that a public compiler (ramSeraph, github.com/ramSeraph/indian_transport, CC0 compilation with the government source
+# named) already pulled from servers that now need a token or do not answer: Survey of India roads (indiamaps.gov.in: road name,
+# class, number), NIC Bharatmaps street map roads (NAME, ROAD_CODE, CLASS, NH_no), PMGSY open data (core network candidates with
+# CN_NUMBER per DRRP road, PMGSY-I/II/III and RCPLWEA proposals with work name, year and batch), GatiShakti MoRTH NH and toll plazas,
+# AMRUT and NUIS urban road centre lines (road name, ward). Task "release": the files byte for byte, in parts of 200 MB.
+GH_REL = "https://github.com/ramSeraph/indian_transport/releases/download"
+RELEASE_FILES = [
+    ("soi-roads", "SOI_Roads.geojsonl.7z", "Survey of India FinalRoad_App MapServer/0 (indiamaps.gov.in)"),
+    ("soi-roads", "SOI_Bridges.geojsonl.7z", "Survey of India (indiamaps.gov.in)"),
+    ("soi-roads", "SOI_Tolls.geojsonl.7z", "Survey of India (indiamaps.gov.in)"),
+    ("nic-roads", "NIC_Roads.geojsonl.7z", "NIC Bharatmaps StreetMap MapServer/1080-1114 (mapservice.gov.in)"),
+    ("nic-roads", "NIC_Roads.parquet.meta.json", "NIC Bharatmaps"),
+    ("pmgsy-roads", "pmgsy_roads_candidates.geojsonl.7z", "PMGSY GeoSadak open data 2022 (core network candidates)"),
+    ("pmgsy-roads", "pmgsy_roads_proposals_i.geojsonl.7z", "PMGSY GeoSadak open data 2022 (PMGSY-I proposals)"),
+    ("pmgsy-roads", "pmgsy_roads_proposals_ii.geojsonl.7z", "PMGSY GeoSadak open data 2022 (PMGSY-II proposals)"),
+    ("pmgsy-roads", "pmgsy_roads_proposals_iii.geojsonl.7z", "PMGSY GeoSadak open data 2022 (PMGSY-III proposals)"),
+    ("pmgsy-roads", "pmgsy_roads_proposals_rcplwea.geojsonl.7z", "PMGSY GeoSadak open data 2022 (RCPLWEA proposals)"),
+    ("morth-roads", "GatiShakti_MORTH_National_Highways.geojsonl.7z", "PM GatiShakti MoRTH national highways"),
+    ("morth-roads", "GatiShakti_MORTH_Toll_Plazas.geojsonl.7z", "PM GatiShakti MoRTH toll plazas"),
+    ("urban-roads", "AMRUT_Road_CLines.geojsonl.7z", "AMRUT road centre lines (Bhuvan)"),
+    ("urban-roads", "Bhuvan_NUIS_Urban_Roads.geojsonl.7z", "NUIS urban roads (Bhuvan)"),
+]
+PROJECTS += [{
+    "name": f"{FAMILY}-compiled", "title": "Compiled public road layers: Survey of India roads, NIC street roads, PMGSY open data, AMRUT urban roads (ramSeraph releases)",
+    "task": "release", "target": "github.com", "env": {}, "probe": None, "pool": False,
+    "unit_label": "file", "record_label": "file",
+    "items": [{"key": f"r-{tag}-{f.split('.')[0].lower()}{'-meta' if f.endswith('.json') else ''}",
+               "payload": {"url": f"{GH_REL}/{tag}/{f}", "name": tag, "file": f, "source": src}} for tag, f, src in RELEASE_FILES],
+    "workers": 1, "delay_ms": 2000,
+}]

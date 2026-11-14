@@ -21,6 +21,10 @@
     "docs": [
       "python",
       "docs.py"
+    ],
+    "release": [
+      "python",
+      "release.py"
     ]
   }
 }

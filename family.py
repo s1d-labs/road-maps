@@ -424,3 +424,14 @@ PROJECTS += [{
                "payload": {"url": f"{GH_REL}/{tag}/{f}", "name": tag, "file": f, "source": src}} for tag, f, src in RELEASE_FILES],
     "workers": 1, "delay_ms": 2000,
 }]
+
+# PMGSY habitations as points (lane C2): 1,084,173 rural habitations with name, 2011 population, district, block and the PMGSY ids
+# (Esri India mirror of the PMGSY data, same server as road-maps-drrp; answers GitHub runners). PMGSY titles name habitations
+# ("T05 to Bhaluadih"); the gazetteer has census/LGD villages, not these hamlets.
+PROJECTS += [{
+    "name": f"{FAMILY}-pmgsy-hab", "title": "PMGSY rural habitations 2021 as points: name, population, district, block (Esri India mirror)",
+    "task": "arcgis", "target": "livingatlas.esri.in", "env": {}, "probe": None,
+    "unit_label": "page of 2000 features", "record_label": "page",
+    "items": [{"key": "count", "payload": {"url": f"{ESRI_IN}/IN_Habitation_2021/MapServer/0", "name": "pmgsy-hab", "size": 2000}}],
+    "workers": 2, "delay_ms": 1000,
+}]

@@ -348,4 +348,7 @@ PROJECTS[[p["name"] for p in PROJECTS].index(f"{FAMILY}-wayback-registers")]["it
     {"key": "c-kl-pwd-dashboard", "payload": {"kind": "cdx", "url": "keralapwd.gov.in:8080/pwddashboard/assetresponse.jsp", "match": "prefix",
                                               "keep": "", "skip": "", "set": "kl"}},
     {"key": "c-kl-pwd-dashboard-80", "payload": {"kind": "cdx", "url": "keralapwd.gov.in/pwddashboard/", "match": "prefix",
-                                                 "keep": r"assetresponse|asset|road", "skip": "", "set": "kl"}}]
+                                                 "keep": r"assetresponse|asset|road", "skip": "", "set": "kl"}},
+    {"key": "c-kl-pwd-domain", "payload": {"kind": "cdx", "url": "keralapwd.gov.in", "match": "domain",
+                                           "keep": r"assetresponse|pwddashboard|road[_ -]?list|list[_ -]?of[_ -]?roads|\b(mdr|sh|odr)\b|register|inventory",
+                                           "skip": WAYBACK_SKIP, "set": "kl"}}]

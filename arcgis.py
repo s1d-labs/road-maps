@@ -110,11 +110,29 @@ def run_count(hub, L, item, seed, project, p):
     hub.complete([item["key"]], "done", fetched=len(items))
 
 
-def run_page(hub, L, item, p):
+BAD_ROW = ("Failed to execute query", "java.io.IOException")
+
+
+def run_page(hub, L, item, p, seed=None, project=None):
     a, b, oid = p["a"], p["b"], p["oid"]
     want = L.count(oid, a, b)
     fmt = p.get("fmt", "geojson")        # "json" (Esri JSON) for servers whose GeoJSON output fails (APSAC, ArcGIS 10.6)
-    d, raw = L.page(oid, a, b, fmt)
+    try:
+        d, raw = L.page(oid, a, b, fmt)
+    except RuntimeError as e:
+        # Some servers fail a whole page for one feature whose stored geometry they cannot write (MP RAMS). Split the id range in
+        # two new queue items; a single id that still fails is stored with its attributes only ("no_geometry": true).
+        if not any(s in str(e) for s in BAD_ROW) or seed is None:
+            raise
+        if b > a:
+            mid = (a + b) // 2
+            seed(project, [{"key": f"{item['key']}/{x}-{y}", "payload": {**p, "a": x, "b": y}} for x, y in ((a, mid), (mid + 1, b))])
+            hub.record(f"{p['name']}-split-{a:09d}-{b:09d}", {"layer": p["url"], "name": p["name"], "first_id": a, "last_id": b, "split": True,
+                                                              "error": str(e)[:200]})
+            hub.complete([item["key"]], "done", fetched=0)
+            return
+        d, raw = L.query(where=f"{oid}>={a} and {oid}<={b}", outFields="*", returnGeometry="false", f=fmt)
+        p = {**p, "no_geometry": True}
     got = len(d.get("features") or [])
     if got != want or d.get("exceededTransferLimit"):
         hub.failure("short-page", item["key"], f"wanted {want}, got {got}")
@@ -124,7 +142,7 @@ def run_page(hub, L, item, p):
     hub.upload_many([(path, gzip.compress(raw, 6), "application/gzip")])
     types = sorted({(f.get("geometry") or {}).get("type") or "none" for f in d["features"]}) if fmt == "geojson" else [d.get("geometryType")]
     hub.record(f"{p['name']}-{a:09d}", {"layer": p["url"], "name": p["name"], "first_id": a, "last_id": b, "features": got, "geometry": types,
-                                        "file": path, "bytes": len(raw), "tls_unverified": p.get("verify") is False, "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
+                                        "file": path, "bytes": len(raw), "tls_unverified": p.get("verify") is False, "no_geometry": p.get("no_geometry", False), "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
     hub.complete([item["key"]], "done", fetched=got)
 
 
@@ -150,7 +168,7 @@ def main():
                 if item["key"] == "count" or item["key"].startswith("count-"):
                     run_count(hub, L, item, seed_queue, project, p)
                 else:
-                    run_page(hub, L, item, p)
+                    run_page(hub, L, item, p, seed_queue, project)
             except Exception as e:      # one bad page must not stop the run
                 hub.failure("bad-item", item["key"], f"{type(e).__name__}: {e}"[:200])
                 hub.complete([item["key"]], "failed", error=type(e).__name__)

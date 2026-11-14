@@ -303,12 +303,13 @@ WAYBACK_HOSTS = [   # (set, host): state PWD, road development corporation and r
 PROJECTS += [{
     "name": f"{FAMILY}-wayback-registers", "title": "Old state PWD road registers from the Internet Archive (UP, WB, Rajasthan, MP, Gujarat, Karnataka)",
     "task": "docs", "target": "web.archive.org", "env": {}, "probe": None,
-    "unit_label": "archive query or document", "record_label": "archive query or document",
+    "unit_label": "archive query or document", "record_label": "archive query or document", "pool": False,   # DIRECT (2026-11-14):
+    # two workers on dev-vps-3 (~/.config/road-site/direct_run.sh); pool jobs started before a push keep the old checkout for hours
     "items": [{"key": "f-uppwd-sh-road-list", "payload": {"kind": "cdx", "url": "uppwd.up.nic.in/pdf/SH_Road_List.pdf", "match": "exact",
                                                           "keep": "", "skip": "", "set": "up"}}]
              + [{"key": f"c-{st}-{h}", "payload": {"kind": "cdx", "url": h, "match": "domain", "keep": WAYBACK_KEEP, "skip": WAYBACK_SKIP,
                                                    "set": st}} for st, h in WAYBACK_HOSTS],
-    "workers": 1, "delay_ms": 4000,
+    "workers": 2, "delay_ms": 4000,
 }]
 
 # OSM wiki road pages under their real titles (lane Y): the guessed "India/Roads/<state>" titles answer 404 (only Odisha exists), so
